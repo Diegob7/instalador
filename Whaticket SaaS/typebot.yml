@@ -1,0 +1,114 @@
+version: "3.7"
+services:
+  typebot-db:
+    image: postgres:13
+    restart: always
+    volumes:
+      - typebot_db_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=typebot
+      - POSTGRES_PASSWORD=typebot
+    networks:
+      - portainer_default
+
+  typebot-builder:
+    image: baptistearno/typebot-builder:latest
+    restart: always
+    depends_on:
+      - typebot-db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.typebot-builder.rule=Host(`builder.mgestampas.com.br`)"
+      - "traefik.http.routers.typebot-builder.entrypoints=web,websecure"
+      - "traefik.http.routers.typebot-builder.tls.certresolver=leresolver"
+    environment:
+      - DATABASE_URL=postgresql://postgres:typebot@typebot-db:5432/typebot
+      - NEXTAUTH_URL=https://builder.mgestampas.com.br
+      - NEXT_PUBLIC_VIEWER_URL=https://viewer.mgestampas.com.br
+      - ENCRYPTION_SECRET=8411b1070282dfb5cab24263a9415e23
+      - DEFAULT_WORKSPACE_PLAN=UNLIMITED
+      - ADMIN_EMAIL=diegomoreira63@gmail.com
+      - DISABLE_SIGNUP=true
+      - SMTP_SECURE=false
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=diegomoreira63@gmail.com
+      - SMTP_PASSWORD=djlm lzcy mcnm qzhf
+      - NEXT_PUBLIC_SMTP_FROM='Suporte Typebot' <diegomoreira63@gmail.com>
+      - S3_ACCESS_KEY=minio
+      - S3_SECRET_KEY=minio123
+      - S3_BUCKET=typebot
+      - S3_ENDPOINT=storage.mgestampas.com.br
+
+    networks:
+      - portainer_default
+
+  typebot-viewer:
+    image: baptistearno/typebot-viewer:latest
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.typebot-viewer.rule=Host(`viewer.mgestampas.com.br`)"
+      - "traefik.http.routers.typebot-viewer.entrypoints=web,websecure"
+      - "traefik.http.routers.typebot-viewer.tls.certresolver=leresolver"
+    environment:
+      - DATABASE_URL=postgresql://postgres:typebot@typebot-db:5432/typebot
+      - NEXTAUTH_URL=https://builder.mgestampas.com.br
+      - NEXT_PUBLIC_VIEWER_URL=https://viewer.mgestampas.com.br
+      - ENCRYPTION_SECRET=8411b1070282dfb5cab24263a9415e23
+      - SMTP_SECURE=false
+      - SMTP_HOST=smtp.gmail.com
+      - NEXT_PUBLIC_SMTP_FROM='Suporte Typebot' <diegomoreira63@gmail.com>
+      - S3_ACCESS_KEY=minio
+      - S3_SECRET_KEY=minio123
+      - S3_BUCKET=typebot
+      - S3_ENDPOINT=storage.mgestampas.com.br
+    networks:
+      - portainer_default
+
+  mail:
+    image: bytemark/smtp
+    restart: always
+    networks:
+      - portainer_default
+
+  minio:
+    image: minio/minio
+    restart: always
+    command: server /data
+    ports:
+      - '9000:9000'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.minio.rule=Host(`storage.mgestampas.com.br`)"
+      - "traefik.http.routers.minio.entrypoints=websecure"
+      - "traefik.http.routers.minio.tls.certresolver=leresolver"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    volumes:
+      - typebot_s3_data:/data
+    networks:
+      - portainer_default
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10;
+      /usr/bin/mc config host add minio http://minio:9000 minio minio123;
+      /usr/bin/mc mb minio/typebot/public;
+      /usr/bin/mc anonymous set public minio/typebot/public;
+      exit 0;
+      "
+    networks:
+      - portainer_default
+
+volumes:
+  typebot_db_data:
+  typebot_s3_data:
+networks:
+  portainer_default:
+    external: true    
